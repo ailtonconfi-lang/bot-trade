@@ -1,17 +1,25 @@
-require("dotenv").config();
 const { ethers } = require("ethers");
 
-// ===== CONFIG =====
+// ===== ENV =====
 const RPC_URL = process.env.RPC_URL;
-const PRIVATE_KEY = process.env.PRIVATE_KEY.trim();
+const PRIVATE_KEY = process.env.PRIVATE_KEY;
 
-// 👉 COLOCA O TOKEN AQUI (EX: USDT pra teste)
-const TOKEN_ADDRESS = "0x55d398326f99059fF775485246999027B3197955";
+// ===== VALIDAÇÃO =====
+if (!RPC_URL) {
+  throw new Error("RPC_URL não definida no Railway");
+}
+
+if (!PRIVATE_KEY) {
+  throw new Error("PRIVATE_KEY não definida no Railway");
+}
+
+// ===== CONFIG =====
+const TOKEN_ADDRESS = "0x55d398326f99059fF775485246999027B3197955"; // USDT (teste)
 
 const WBNB = "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c";
 const ROUTER = "0x10ED43C718714eb63d5aA57B78B54704E256024E";
 
-// ===== CONFIG ESTRATÉGIA =====
+// ===== ESTRATÉGIA =====
 const BUY_TRIGGER = 0.98;
 const SELL_TRIGGER = 1.02;
 const STOP_LOSS = 0.95;
@@ -19,66 +27,80 @@ const TRAILING = 0.97;
 
 // ===== SETUP =====
 const provider = new ethers.JsonRpcProvider(RPC_URL);
-const wallet = new ethers.Wallet(PRIVATE_KEY, provider);
+const wallet = new ethers.Wallet(PRIVATE_KEY.trim(), provider);
 
 // ===== CONTRATOS =====
-const router = new ethers.Contract(ROUTER, [
-  "function getAmountsOut(uint amountIn, address[] memory path) view returns (uint[] memory)",
-  "function swapExactETHForTokens(uint,uint,address[],address,uint) payable",
-  "function swapExactTokensForETH(uint,uint,address[],address,uint)"
-], wallet);
+const router = new ethers.Contract(
+  ROUTER,
+  [
+    "function getAmountsOut(uint amountIn, address[] memory path) view returns (uint[] memory)",
+    "function swapExactETHForTokens(uint,uint,address[],address,uint) payable",
+    "function swapExactTokensForETH(uint,uint,address[],address,uint)"
+  ],
+  wallet
+);
 
-const token = new ethers.Contract(TOKEN_ADDRESS, [
-  "function approve(address spender,uint amount) returns (bool)",
-  "function balanceOf(address owner) view returns (uint)"
-], wallet);
+const token = new ethers.Contract(
+  TOKEN_ADDRESS,
+  [
+    "function approve(address spender,uint amount) returns (bool)",
+    "function balanceOf(address owner) view returns (uint)"
+  ],
+  wallet
+);
 
-// ===== VARIÁVEIS =====
+// ===== ESTADO =====
 let basePrice = null;
 let highestPrice = 0;
 let inPosition = false;
 
-// ===== PREÇO REAL =====
+// ===== PREÇO =====
 async function getPrice() {
   const amounts = await router.getAmountsOut(
     ethers.parseEther("0.01"),
     [WBNB, TOKEN_ADDRESS]
   );
+
   return Number(ethers.formatEther(amounts[1]));
 }
 
 // ===== APPROVE =====
 async function approve() {
-  console.log("🔓 Fazendo approve...");
+  console.log("🔓 Approve...");
   const tx = await token.approve(ROUTER, ethers.MaxUint256);
   await tx.wait();
   console.log("✅ Approve OK");
 }
 
-// ===== COMPRA =====
+// ===== BUY =====
 async function buy() {
   console.log("🟢 COMPRANDO...");
+
   const tx = await router.swapExactETHForTokens(
     0,
     [WBNB, TOKEN_ADDRESS],
     wallet.address,
-    Math.floor(Date.now()/1000)+300,
-    { value: ethers.parseEther("0.01") }
+    Math.floor(Date.now() / 1000) + 300,
+    {
+      value: ethers.parseEther("0.01"),
+    }
   );
-  await tx.wait();
 
+  await tx.wait();
   await approve();
 
   inPosition = true;
+
   console.log("✅ Comprado");
 }
 
-// ===== VENDA =====
+// ===== SELL =====
 async function sell() {
   console.log("🔴 VENDENDO...");
+
   const balance = await token.balanceOf(wallet.address);
 
-  if (balance == 0) {
+  if (balance == 0n) {
     console.log("⚠️ Sem tokens pra vender");
     return;
   }
@@ -88,12 +110,13 @@ async function sell() {
     0,
     [TOKEN_ADDRESS, WBNB],
     wallet.address,
-    Math.floor(Date.now()/1000)+300
+    Math.floor(Date.now() / 1000) + 300
   );
 
   await tx.wait();
 
   inPosition = false;
+
   console.log("✅ Vendido");
 }
 
@@ -113,13 +136,13 @@ async function run() {
     if (!inPosition && price <= basePrice * BUY_TRIGGER) {
       console.log("📉 Queda detectada → COMPRAR");
       await buy();
+
       basePrice = price;
       highestPrice = price;
     }
 
-    // ===== SE ESTÁ POSICIONADO =====
+    // ===== GERENCIAMENTO =====
     if (inPosition) {
-
       if (price > highestPrice) {
         highestPrice = price;
       }
@@ -145,7 +168,6 @@ async function run() {
         basePrice = price;
       }
     }
-
   } catch (err) {
     console.log("❌ Erro:", err.message);
   }
