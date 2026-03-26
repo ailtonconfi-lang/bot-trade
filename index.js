@@ -10,7 +10,8 @@ if (!RPC_URL) {
 }
 
 if (!PRIVATE_KEY) {
-  throw new Error("PRIVATE_KEY não definida no Railway");
+  console.log("⚠️ PRIVATE_KEY não encontrada, usando fallback");
+}
 }
 
 // ===== CONFIG =====
