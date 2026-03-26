@@ -1,10 +1,10 @@
 const { ethers } = require("ethers");
 
-// ================== ENV ==================
+// ================= ENV =================
 const RPC_URL = process.env.RPC_URL || "https://bsc-dataseed.binance.org/";
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
 
-// ================== SETUP ==================
+// ================= SETUP =================
 const provider = new ethers.JsonRpcProvider(RPC_URL);
 const wallet = PRIVATE_KEY ? new ethers.Wallet(PRIVATE_KEY, provider) : null;
 
@@ -12,7 +12,7 @@ console.log("🚀 Bot iniciado (modo RPC)");
 console.log("🔗 RPC:", RPC_URL ? "OK" : "FALHANDO");
 console.log("🔑 WALLET:", wallet ? "OK" : "SEM CHAVE");
 
-// ================== PANCAKESWAP ==================
+// ================= PANCAKESWAP =================
 const ROUTER = "0x10ED43C718714eb63d5aA57B78B54704E256024E";
 
 const routerAbi = [
@@ -21,19 +21,19 @@ const routerAbi = [
 
 const router = new ethers.Contract(ROUTER, routerAbi, provider);
 
-// ================== TOKENS ==================
+// ================= TOKENS =================
 const WBNB = "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c";
 const BTCB = "0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c";
 const USDT = "0x55d398326f99059fF775485246999027B3197955";
 
-// ================== ESTADO ==================
+// ================= ESTADO =================
 let baseBTC = null;
 let baseBNB = null;
 
 let inBTC = false;
 let inBNB = false;
 
-// ================== PREÇO (RPC REAL) ==================
+// ================= PREÇO (RPC REAL) =================
 async function getPrice(token) {
   try {
     const amountIn = ethers.parseUnits("1", 18);
@@ -51,7 +51,7 @@ async function getPrice(token) {
   }
 }
 
-// ================== AÇÕES ==================
+// ================= AÇÕES =================
 async function buy(token) {
   console.log("🟢 COMPRANDO:", token);
 }
@@ -60,7 +60,7 @@ async function sell(token) {
   console.log("🔴 VENDENDO:", token);
 }
 
-// ================== LOOP PROFISSIONAL ==================
+// ================= LOOP 24H =================
 async function loop() {
   while (true) {
     try {
@@ -109,7 +109,7 @@ async function loop() {
       console.log("🔥 Erro no loop:", err.message);
     }
 
-    // 🔑 ESSENCIAL (evita crash no Railway)
+    // ⛔ ESSENCIAL (evita crash no Railway)
     await new Promise(resolve => setTimeout(resolve, 10000));
   }
 }
