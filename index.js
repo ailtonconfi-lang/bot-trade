@@ -1,5 +1,8 @@
 const { ethers } = require("ethers");
 
+// ================= FETCH (corrige erro no Railway) =================
+const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
+
 // ================= ENV =================
 const RPC_URL = process.env.RPC_URL || "https://bsc-dataseed.binance.org/";
 
@@ -8,20 +11,6 @@ const provider = new ethers.JsonRpcProvider(RPC_URL);
 
 console.log("🚀 Bot iniciado (modo RPC)");
 
-// ================= PANCAKESWAP =================
-const ROUTER = "0x10ED43C718714eb63d5aA57B78B54704E256024E";
-
-const routerAbi = [
-  "function getAmountsOut(uint amountIn, address[] memory path) view returns (uint[] memory amounts)"
-];
-
-const router = new ethers.Contract(ROUTER, routerAbi, provider);
-
-// ================= TOKENS =================
-const WBNB = "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c";
-const BTCB = "0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c";
-const USDT = "0x55d398326f99059fF775485246999027B3197955";
-
 // ================= ESTADO =================
 let baseBTC = null;
 let baseBNB = null;
@@ -29,36 +18,26 @@ let baseBNB = null;
 let inBTC = false;
 let inBNB = false;
 
-// ================= PREÇO BTC =================
+// ================= PREÇO REAL BTC (BINANCE) =================
 async function getBTCPrice() {
   try {
-    const amountIn = ethers.parseUnits("1", 18);
-
-    const path = [BTCB, WBNB, USDT];
-
-    const amounts = await router.getAmountsOut(amountIn, path);
-
-    return Number(ethers.formatUnits(amounts[2], 18));
-
+    const res = await fetch("https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT");
+    const data = await res.json();
+    return Number(data.price);
   } catch (err) {
-    console.log("❌ BTC erro:", err.message);
+    console.log("❌ BTC API erro:", err.message);
     return null;
   }
 }
 
-// ================= PREÇO BNB =================
+// ================= PREÇO REAL BNB (BINANCE) =================
 async function getBNBPrice() {
   try {
-    const amountIn = ethers.parseUnits("1", 18);
-
-    const path = [WBNB, USDT];
-
-    const amounts = await router.getAmountsOut(amountIn, path);
-
-    return Number(ethers.formatUnits(amounts[1], 18));
-
+    const res = await fetch("https://api.binance.com/api/v3/ticker/price?symbol=BNBUSDT");
+    const data = await res.json();
+    return Number(data.price);
   } catch (err) {
-    console.log("❌ BNB erro:", err.message);
+    console.log("❌ BNB API erro:", err.message);
     return null;
   }
 }
@@ -77,7 +56,7 @@ async function loop() {
       console.log("💰 BTC:", btc);
       console.log("💰 BNB:", bnb);
 
-      // BTC
+      // ===== BTC =====
       if (!baseBTC) baseBTC = btc;
 
       if (!inBTC && btc <= baseBTC * 0.995) {
@@ -92,7 +71,7 @@ async function loop() {
         baseBTC = btc;
       }
 
-      // BNB
+      // ===== BNB =====
       if (!baseBNB) baseBNB = bnb;
 
       if (!inBNB && bnb <= baseBNB * 0.995) {
