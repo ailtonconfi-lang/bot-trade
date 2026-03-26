@@ -1,4 +1,12 @@
+const http = require("http");
+
 console.log("🚀 Bot iniciado");
+
+// ===== SERVIDOR FAKE (impede restart) =====
+http.createServer((req, res) => {
+  res.write("Bot rodando");
+  res.end();
+}).listen(3000);
 
 // ================= ESTADO =================
 let baseBTC = null;
@@ -7,17 +15,13 @@ let baseBNB = null;
 let inBTC = false;
 let inBNB = false;
 
-// ================= PREÇO SEGURO =================
+// ================= PREÇO =================
 async function getPrices() {
   try {
     const res = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,binancecoin&vs_currencies=usd");
     const data = await res.json();
 
-    // 🔥 proteção contra undefined
-    if (!data.bitcoin || !data.binancecoin) {
-      console.log("⚠️ API veio vazia");
-      return null;
-    }
+    if (!data.bitcoin || !data.binancecoin) return null;
 
     return {
       btc: data.bitcoin.usd,
@@ -46,7 +50,7 @@ async function runBot() {
   console.log("💰 BTC:", btc);
   console.log("💰 BNB:", bnb);
 
-  // ===== BTC =====
+  // BTC
   if (!baseBTC) baseBTC = btc;
 
   if (!inBTC && btc <= baseBTC * 0.995) {
@@ -61,7 +65,7 @@ async function runBot() {
     baseBTC = btc;
   }
 
-  // ===== BNB =====
+  // BNB
   if (!baseBNB) baseBNB = bnb;
 
   if (!inBNB && bnb <= baseBNB * 0.995) {
