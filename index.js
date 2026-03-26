@@ -1,4 +1,5 @@
 const { ethers } = require("ethers");
+const https = require("https");
 
 // ===== ENV =====
 const RPC_URL = process.env.RPC_URL || "https://bsc-dataseed.binance.org/";
@@ -21,44 +22,66 @@ let basePriceBNB = null;
 let inPositionBTC = false;
 let inPositionBNB = false;
 
-// ===== FUNÇÃO PREÇO REAL (BINANCE) =====
-const https = require("https");
-
+// ===== PREÇO REAL (BINANCE - CORRIGIDO) =====
 function getRealPrice(symbol) {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     https.get(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`, (res) => {
       let data = "";
 
       res.on("data", chunk => data += chunk);
+
       res.on("end", () => {
         try {
           const json = JSON.parse(data);
-          resolve(parseFloat(json.price));
-        } catch (e) {
-          reject(e);
+
+          if (!json.price) {
+            console.log("❌ API inválida:", json);
+            return resolve(null);
+          }
+
+          const price = parseFloat(json.price);
+
+          if (isNaN(price)) {
+            console.log("❌ Preço inválido");
+            return resolve(null);
+          }
+
+          resolve(price);
+
+        } catch (err) {
+          console.log("❌ Erro parse:", err.message);
+          resolve(null);
         }
       });
-    }).on("error", reject);
+
+    }).on("error", (err) => {
+      console.log("❌ Erro request:", err.message);
+      resolve(null);
+    });
   });
 }
 
 // ===== COMPRA =====
 async function buy(token) {
   console.log("🟢 COMPRANDO", token);
-  // (simplificado - depois melhoramos)
 }
 
 // ===== VENDA =====
 async function sell(token) {
   console.log("🔴 VENDENDO", token);
-  // (simplificado - depois melhoramos)
 }
 
-// ===== LOOP PRINCIPAL =====
+// ===== LOOP =====
 setInterval(async () => {
 
   const priceBTC = await getRealPrice("BTCUSDT");
   const priceBNB = await getRealPrice("BNBUSDT");
+
+  // proteção contra erro
+  if (!priceBTC || !priceBNB) {
+    console.log("⚠️ Preço inválido, pulando...");
+    return;
+  }
 
   console.log("💰 BTC:", priceBTC);
   console.log("💰 BNB:", priceBNB);
@@ -67,14 +90,12 @@ setInterval(async () => {
   if (!basePriceBTC) basePriceBTC = priceBTC;
 
   if (!inPositionBTC && priceBTC <= basePriceBTC * 0.995) {
-    console.log("🟢 COMPRANDO BTC");
     await buy(BTCB);
     inPositionBTC = true;
     basePriceBTC = priceBTC;
   }
 
   if (inPositionBTC && priceBTC >= basePriceBTC * 1.005) {
-    console.log("🔴 VENDENDO BTC");
     await sell(BTCB);
     inPositionBTC = false;
     basePriceBTC = priceBTC;
@@ -84,14 +105,12 @@ setInterval(async () => {
   if (!basePriceBNB) basePriceBNB = priceBNB;
 
   if (!inPositionBNB && priceBNB <= basePriceBNB * 0.995) {
-    console.log("🟢 COMPRANDO BNB");
     await buy(WBNB);
     inPositionBNB = true;
     basePriceBNB = priceBNB;
   }
 
   if (inPositionBNB && priceBNB >= basePriceBNB * 1.005) {
-    console.log("🔴 VENDENDO BNB");
     await sell(WBNB);
     inPositionBNB = false;
     basePriceBNB = priceBNB;
