@@ -1,22 +1,27 @@
 require("dotenv").config();
 const { ethers } = require("ethers");
 
+// ===== CONFIG =====
 const RPC_URL = process.env.RPC_URL;
-const PRIVATE_KEY = process.env.PRIVATE_KEY;
+const PRIVATE_KEY = process.env.PRIVATE_KEY.trim();
 
-const TOKEN_ADDRESS = "SEU_TOKEN_AQUI";
+// 👉 COLOCA O TOKEN AQUI (EX: USDT pra teste)
+const TOKEN_ADDRESS = "0x55d398326f99059fF775485246999027B3197955";
+
 const WBNB = "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c";
 const ROUTER = "0x10ED43C718714eb63d5aA57B78B54704E256024E";
 
-// CONFIG
+// ===== CONFIG ESTRATÉGIA =====
 const BUY_TRIGGER = 0.98;
 const SELL_TRIGGER = 1.02;
 const STOP_LOSS = 0.95;
 const TRAILING = 0.97;
 
+// ===== SETUP =====
 const provider = new ethers.JsonRpcProvider(RPC_URL);
 const wallet = new ethers.Wallet(PRIVATE_KEY, provider);
 
+// ===== CONTRATOS =====
 const router = new ethers.Contract(ROUTER, [
   "function getAmountsOut(uint amountIn, address[] memory path) view returns (uint[] memory)",
   "function swapExactETHForTokens(uint,uint,address[],address,uint) payable",
@@ -28,10 +33,12 @@ const token = new ethers.Contract(TOKEN_ADDRESS, [
   "function balanceOf(address owner) view returns (uint)"
 ], wallet);
 
+// ===== VARIÁVEIS =====
 let basePrice = null;
 let highestPrice = 0;
 let inPosition = false;
 
+// ===== PREÇO REAL =====
 async function getPrice() {
   const amounts = await router.getAmountsOut(
     ethers.parseEther("0.01"),
@@ -40,12 +47,15 @@ async function getPrice() {
   return Number(ethers.formatEther(amounts[1]));
 }
 
+// ===== APPROVE =====
 async function approve() {
+  console.log("🔓 Fazendo approve...");
   const tx = await token.approve(ROUTER, ethers.MaxUint256);
   await tx.wait();
   console.log("✅ Approve OK");
 }
 
+// ===== COMPRA =====
 async function buy() {
   console.log("🟢 COMPRANDO...");
   const tx = await router.swapExactETHForTokens(
@@ -56,14 +66,22 @@ async function buy() {
     { value: ethers.parseEther("0.01") }
   );
   await tx.wait();
+
   await approve();
+
   inPosition = true;
   console.log("✅ Comprado");
 }
 
+// ===== VENDA =====
 async function sell() {
   console.log("🔴 VENDENDO...");
   const balance = await token.balanceOf(wallet.address);
+
+  if (balance == 0) {
+    console.log("⚠️ Sem tokens pra vender");
+    return;
+  }
 
   const tx = await router.swapExactTokensForETH(
     balance,
@@ -72,26 +90,34 @@ async function sell() {
     wallet.address,
     Math.floor(Date.now()/1000)+300
   );
+
   await tx.wait();
+
   inPosition = false;
   console.log("✅ Vendido");
 }
 
+// ===== LOOP =====
 async function run() {
   try {
     const price = await getPrice();
     console.log("💰 Preço:", price);
 
-    if (!basePrice) basePrice = price;
+    if (!basePrice) {
+      basePrice = price;
+      console.log("📌 Base inicial:", basePrice);
+      return;
+    }
 
-    // COMPRA
+    // ===== COMPRA =====
     if (!inPosition && price <= basePrice * BUY_TRIGGER) {
+      console.log("📉 Queda detectada → COMPRAR");
       await buy();
       basePrice = price;
       highestPrice = price;
     }
 
-    // SE ESTÁ COMPRADO
+    // ===== SE ESTÁ POSICIONADO =====
     if (inPosition) {
 
       if (price > highestPrice) {
@@ -105,14 +131,14 @@ async function run() {
         basePrice = price;
       }
 
-      // TAKE PROFIT FIXO
+      // TAKE PROFIT
       else if (price >= basePrice * SELL_TRIGGER) {
         console.log("🎯 TAKE PROFIT");
         await sell();
         basePrice = price;
       }
 
-      // TRAILING PROFIT
+      // TRAILING
       else if (price <= highestPrice * TRAILING) {
         console.log("📉 TRAILING SELL");
         await sell();
