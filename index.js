@@ -1,24 +1,4 @@
-const { ethers } = require("ethers");
-
 console.log("🚀 Bot iniciado");
-
-// ================= RPC =================
-const RPC_URL = "https://bsc-dataseed.binance.org/";
-const provider = new ethers.JsonRpcProvider(RPC_URL);
-
-// ================= PANCAKE =================
-const ROUTER = "0x10ED43C718714eb63d5aA57B78B54704E256024E";
-
-const routerAbi = [
-  "function getAmountsOut(uint amountIn, address[] memory path) view returns (uint[] memory amounts)"
-];
-
-const router = new ethers.Contract(ROUTER, routerAbi, provider);
-
-// ================= TOKENS =================
-const WBNB = "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c";
-const BTCB = "0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c";
-const USDT = "0x55d398326f99059fF775485246999027B3197955";
 
 // ================= ESTADO =================
 let baseBTC = null;
@@ -27,34 +7,25 @@ let baseBNB = null;
 let inBTC = false;
 let inBNB = false;
 
-// ================= PREÇO BTC =================
-async function getBTCPrice() {
+// ================= PREÇO SEGURO =================
+async function getPrices() {
   try {
-    const amountIn = ethers.parseUnits("1", 18);
-    const path = [BTCB, WBNB, USDT];
+    const res = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,binancecoin&vs_currencies=usd");
+    const data = await res.json();
 
-    const amounts = await router.getAmountsOut(amountIn, path);
+    // 🔥 proteção contra undefined
+    if (!data.bitcoin || !data.binancecoin) {
+      console.log("⚠️ API veio vazia");
+      return null;
+    }
 
-    return Number(ethers.formatUnits(amounts[2], 18));
+    return {
+      btc: data.bitcoin.usd,
+      bnb: data.binancecoin.usd
+    };
 
   } catch (err) {
-    console.log("❌ BTC erro:", err.message);
-    return null;
-  }
-}
-
-// ================= PREÇO BNB =================
-async function getBNBPrice() {
-  try {
-    const amountIn = ethers.parseUnits("1", 18);
-    const path = [WBNB, USDT];
-
-    const amounts = await router.getAmountsOut(amountIn, path);
-
-    return Number(ethers.formatUnits(amounts[1], 18));
-
-  } catch (err) {
-    console.log("❌ BNB erro:", err.message);
+    console.log("❌ erro API:", err.message);
     return null;
   }
 }
@@ -62,13 +33,15 @@ async function getBNBPrice() {
 // ================= BOT =================
 async function runBot() {
 
-  const btc = await getBTCPrice();
-  const bnb = await getBNBPrice();
+  const prices = await getPrices();
 
-  if (!btc || !bnb) {
+  if (!prices) {
     console.log("⚠️ erro ao pegar preço");
     return;
   }
+
+  const btc = prices.btc;
+  const bnb = prices.bnb;
 
   console.log("💰 BTC:", btc);
   console.log("💰 BNB:", bnb);
@@ -106,4 +79,4 @@ async function runBot() {
 
 // ================= LOOP =================
 setInterval(runBot, 10000);
-runBot();
+runBot()
