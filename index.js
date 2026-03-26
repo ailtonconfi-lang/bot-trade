@@ -12,8 +12,8 @@ const USDT = "0x55d398326f99059fF775485246999027B3197955";
 const BTCB = "0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c";
 
 // ===== ESTRATÉGIA =====
-const BUY_TRIGGER = 0.98;
-const SELL_TRIGGER = 1.02;
+const BUY_TRIGGER = 0.995;
+const SELL_TRIGGER = 1.005;
 const AMOUNT_USDT = "5"; // valor por trade
 
 // ===== SETUP =====
