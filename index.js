@@ -1,5 +1,3 @@
-const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
-
 console.log("🚀 Bot iniciado");
 
 // ================= ESTADO =================
@@ -9,7 +7,7 @@ let baseBNB = null;
 let inBTC = false;
 let inBNB = false;
 
-// ================= PREÇO (COINGECKO - MAIS ESTÁVEL) =================
+// ================= PREÇO (COINGECKO) =================
 async function getPrices() {
   try {
     const res = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,binancecoin&vs_currencies=usd");
@@ -26,7 +24,7 @@ async function getPrices() {
   }
 }
 
-// ================= LOOP CONTROLADO =================
+// ================= BOT =================
 async function runBot() {
 
   const prices = await getPrices();
@@ -73,8 +71,6 @@ async function runBot() {
   }
 }
 
-// ================= INTERVALO (NÃO MORRE) =================
+// ================= LOOP =================
 setInterval(runBot, 10000);
-
-// primeira execução imediata
 runBot();
