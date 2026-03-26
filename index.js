@@ -22,15 +22,24 @@ let inPositionBTC = false;
 let inPositionBNB = false;
 
 // ===== FUNÇÃO PREÇO REAL (BINANCE) =====
-async function getRealPrice(symbol) {
-  try {
-    const res = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`);
-    const data = await res.json();
-    return parseFloat(data.price);
-  } catch (err) {
-    console.log("Erro API:", err.message);
-    return null;
-  }
+const https = require("https");
+
+function getRealPrice(symbol) {
+  return new Promise((resolve, reject) => {
+    https.get(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`, (res) => {
+      let data = "";
+
+      res.on("data", chunk => data += chunk);
+      res.on("end", () => {
+        try {
+          const json = JSON.parse(data);
+          resolve(parseFloat(json.price));
+        } catch (e) {
+          reject(e);
+        }
+      });
+    }).on("error", reject);
+  });
 }
 
 // ===== COMPRA =====
