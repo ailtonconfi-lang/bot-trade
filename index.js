@@ -1,4 +1,3 @@
-require("dotenv").config();
 const { ethers } = require("ethers");
 
 // ===== ENV =====
@@ -6,126 +5,87 @@ const RPC_URL = process.env.RPC_URL || "https://bsc-dataseed.binance.org/";
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
 
 // ===== CONFIG =====
-const ROUTER = "0x10ED43C718714eb63d5aA57B78B54704E256024E"; // Pancake
+const ROUTER = "0x10ED43C718714eb63d5aA57B78B54704E256024E";
 const WBNB = "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c";
-const USDT = "0x55d398326f99059fF775485246999027B3197955";
 const BTCB = "0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c";
-
-// ===== ESTRATÉGIA =====
-const BUY_TRIGGER = 0.995;
-const SELL_TRIGGER = 1.005;
-const AMOUNT_USDT = "5"; // valor por trade
 
 // ===== SETUP =====
 const provider = new ethers.JsonRpcProvider(RPC_URL);
-let wallet = null;
+const wallet = PRIVATE_KEY ? new ethers.Wallet(PRIVATE_KEY, provider) : null;
 
-if (PRIVATE_KEY) {
-  wallet = new ethers.Wallet(PRIVATE_KEY, provider);
-  console.log("✅ Wallet carregada");
-} else {
-  console.log("❌ Sem PRIVATE_KEY");
-}
-
-const router = new ethers.Contract(ROUTER, [
-  "function getAmountsOut(uint amountIn, address[] memory path) view returns (uint[] memory amounts)",
-  "function swapExactTokensForTokens(uint amountIn,uint amountOutMin,address[] calldata path,address to,uint deadline)"
-], wallet);
+console.log("🚀 Bot iniciado");
 
 // ===== ESTADO =====
-let lastPriceBNB = 0;
-let lastPriceBTC = 0;
+let basePriceBTC = null;
+let basePriceBNB = null;
+let inPositionBTC = false;
+let inPositionBNB = false;
 
-// ===== FUNÇÃO PREÇO =====
-async function getPrice(token) {
-  const amountIn = ethers.parseUnits("1", 18);
-  const path = [token, USDT];
-  const amounts = await router.getAmountsOut(amountIn, path);
-  return Number(ethers.formatUnits(amounts[1], 18));
+// ===== FUNÇÃO PREÇO REAL (BINANCE) =====
+async function getRealPrice(symbol) {
+  try {
+    const res = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`);
+    const data = await res.json();
+    return parseFloat(data.price);
+  } catch (err) {
+    console.log("Erro API:", err.message);
+    return null;
+  }
 }
 
 // ===== COMPRA =====
 async function buy(token) {
-  try {
-    const amountIn = ethers.parseUnits(AMOUNT_USDT, 18);
-    const path = [USDT, token];
-
-    await router.swapExactTokensForTokens(
-      amountIn,
-      0,
-      path,
-      wallet.address,
-      Math.floor(Date.now() / 1000) + 60
-    );
-
-    console.log("🟢 COMPROU", token);
-  } catch (e) {
-    console.log("❌ Erro compra:", e.message);
-  }
+  console.log("🟢 COMPRANDO", token);
+  // (simplificado - depois melhoramos)
 }
 
 // ===== VENDA =====
 async function sell(token) {
-  try {
-    const amountIn = ethers.parseUnits("0.001", 18);
-    const path = [token, USDT];
-
-    await router.swapExactTokensForTokens(
-      amountIn,
-      0,
-      path,
-      wallet.address,
-      Math.floor(Date.now() / 1000) + 60
-    );
-
-    console.log("🔴 VENDEU", token);
-  } catch (e) {
-    console.log("❌ Erro venda:", e.message);
-  }
+  console.log("🔴 VENDENDO", token);
+  // (simplificado - depois melhoramos)
 }
 
-// ===== LOOP =====
-async function runBot() {
-  if (!wallet) {
-    console.log("⛔ Bot parado (sem wallet)");
-    return;
+// ===== LOOP PRINCIPAL =====
+setInterval(async () => {
+
+  const priceBTC = await getRealPrice("BTCUSDT");
+  const priceBNB = await getRealPrice("BNBUSDT");
+
+  console.log("💰 BTC:", priceBTC);
+  console.log("💰 BNB:", priceBNB);
+
+  // ===== BTC =====
+  if (!basePriceBTC) basePriceBTC = priceBTC;
+
+  if (!inPositionBTC && priceBTC <= basePriceBTC * 0.995) {
+    console.log("🟢 COMPRANDO BTC");
+    await buy(BTCB);
+    inPositionBTC = true;
+    basePriceBTC = priceBTC;
   }
 
-  console.log("🚀 Bot rodando...");
+  if (inPositionBTC && priceBTC >= basePriceBTC * 1.005) {
+    console.log("🔴 VENDENDO BTC");
+    await sell(BTCB);
+    inPositionBTC = false;
+    basePriceBTC = priceBTC;
+  }
 
-  setInterval(async () => {
-    try {
-      const priceBNB = await getPrice(WBNB);
-      const priceBTC = await getPrice(BTCB);
+  // ===== BNB =====
+  if (!basePriceBNB) basePriceBNB = priceBNB;
 
-      console.log("💰 BNB:", priceBNB);
-      console.log("💰 BTC:", priceBTC);
+  if (!inPositionBNB && priceBNB <= basePriceBNB * 0.995) {
+    console.log("🟢 COMPRANDO BNB");
+    await buy(WBNB);
+    inPositionBNB = true;
+    basePriceBNB = priceBNB;
+  }
 
-      // ===== BNB =====
-      if (lastPriceBNB && priceBNB <= lastPriceBNB * BUY_TRIGGER) {
-        await buy(WBNB);
-      }
+  if (inPositionBNB && priceBNB >= basePriceBNB * 1.005) {
+    console.log("🔴 VENDENDO BNB");
+    await sell(WBNB);
+    inPositionBNB = false;
+    basePriceBNB = priceBNB;
+  }
 
-      if (lastPriceBNB && priceBNB >= lastPriceBNB * SELL_TRIGGER) {
-        await sell(WBNB);
-      }
-
-      // ===== BTC =====
-      if (lastPriceBTC && priceBTC <= lastPriceBTC * BUY_TRIGGER) {
-        await buy(BTCB);
-      }
-
-      if (lastPriceBTC && priceBTC >= lastPriceBTC * SELL_TRIGGER) {
-        await sell(BTCB);
-      }
-
-      lastPriceBNB = priceBNB;
-      lastPriceBTC = priceBTC;
-
-    } catch (e) {
-      console.log("Erro loop:", e.message);
-    }
-  }, 10000);
-}
-
-runBot();
+}, 10000);
