@@ -9,8 +9,6 @@ const provider = new ethers.JsonRpcProvider(RPC_URL);
 const wallet = PRIVATE_KEY ? new ethers.Wallet(PRIVATE_KEY, provider) : null;
 
 console.log("🚀 Bot iniciado (modo RPC)");
-console.log("🔗 RPC:", RPC_URL ? "OK" : "FALHANDO");
-console.log("🔑 WALLET:", wallet ? "OK" : "SEM CHAVE");
 
 // ================= PANCAKESWAP =================
 const ROUTER = "0x10ED43C718714eb63d5aA57B78B54704E256024E";
@@ -33,15 +31,17 @@ let baseBNB = null;
 let inBTC = false;
 let inBNB = false;
 
-// ================= PREÇO (RPC REAL) =================
+// ================= PREÇO CORRETO =================
 async function getPrice(token) {
   try {
     const amountIn = ethers.parseUnits("1", 18);
-    const path = [token, USDT];
+
+    // 🔥 rota corrigida
+    const path = [token, WBNB, USDT];
 
     const amounts = await router.getAmountsOut(amountIn, path);
 
-    const price = Number(ethers.formatUnits(amounts[1], 18));
+    const price = Number(ethers.formatUnits(amounts[2], 18));
 
     return price;
 
@@ -51,67 +51,50 @@ async function getPrice(token) {
   }
 }
 
-// ================= AÇÕES =================
-async function buy(token) {
-  console.log("🟢 COMPRANDO:", token);
-}
-
-async function sell(token) {
-  console.log("🔴 VENDENDO:", token);
-}
-
-// ================= LOOP 24H =================
+// ================= LOOP =================
 async function loop() {
   while (true) {
-    try {
-      const btc = await getPrice(BTCB);
-      const bnb = await getPrice(WBNB);
 
-      if (!btc || !bnb) {
-        console.log("⚠️ erro ao pegar preço");
-      } else {
+    const btc = await getPrice(BTCB);
+    const bnb = await getPrice(WBNB);
 
-        console.log("💰 BTC:", btc);
-        console.log("💰 BNB:", bnb);
+    if (!btc || !bnb) {
+      console.log("⚠️ erro ao pegar preço");
+    } else {
 
-        // ===== BTC =====
-        if (!baseBTC) baseBTC = btc;
+      console.log("💰 BTC:", btc);
+      console.log("💰 BNB:", bnb);
 
-        if (!inBTC && btc <= baseBTC * 0.995) {
-          await buy("BTC");
-          inBTC = true;
-          baseBTC = btc;
-        }
+      if (!baseBTC) baseBTC = btc;
+      if (!baseBNB) baseBNB = bnb;
 
-        if (inBTC && btc >= baseBTC * 1.005) {
-          await sell("BTC");
-          inBTC = false;
-          baseBTC = btc;
-        }
-
-        // ===== BNB =====
-        if (!baseBNB) baseBNB = bnb;
-
-        if (!inBNB && bnb <= baseBNB * 0.995) {
-          await buy("BNB");
-          inBNB = true;
-          baseBNB = bnb;
-        }
-
-        if (inBNB && bnb >= baseBNB * 1.005) {
-          await sell("BNB");
-          inBNB = false;
-          baseBNB = bnb;
-        }
+      if (!inBTC && btc <= baseBTC * 0.995) {
+        console.log("🟢 COMPRAR BTC");
+        inBTC = true;
+        baseBTC = btc;
       }
 
-    } catch (err) {
-      console.log("🔥 Erro no loop:", err.message);
+      if (inBTC && btc >= baseBTC * 1.005) {
+        console.log("🔴 VENDER BTC");
+        inBTC = false;
+        baseBTC = btc;
+      }
+
+      if (!inBNB && bnb <= baseBNB * 0.995) {
+        console.log("🟢 COMPRAR BNB");
+        inBNB = true;
+        baseBNB = bnb;
+      }
+
+      if (inBNB && bnb >= baseBNB * 1.005) {
+        console.log("🔴 VENDER BNB");
+        inBNB = false;
+        baseBNB = bnb;
+      }
     }
 
-    // ⛔ ESSENCIAL (evita crash no Railway)
-    await new Promise(resolve => setTimeout(resolve, 10000));
+    await new Promise(r => setTimeout(r, 10000));
   }
 }
 
-loop();
+loop()
