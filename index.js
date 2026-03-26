@@ -2,11 +2,9 @@ const { ethers } = require("ethers");
 
 // ================= ENV =================
 const RPC_URL = process.env.RPC_URL || "https://bsc-dataseed.binance.org/";
-const PRIVATE_KEY = process.env.PRIVATE_KEY;
 
 // ================= SETUP =================
 const provider = new ethers.JsonRpcProvider(RPC_URL);
-const wallet = PRIVATE_KEY ? new ethers.Wallet(PRIVATE_KEY, provider) : null;
 
 console.log("🚀 Bot iniciado (modo RPC)");
 
@@ -31,30 +29,36 @@ let baseBNB = null;
 let inBTC = false;
 let inBNB = false;
 
-// ================= PREÇO CORRIGIDO =================
-async function getPrice(token) {
+// ================= PREÇO BTC =================
+async function getBTCPrice() {
   try {
     const amountIn = ethers.parseUnits("1", 18);
 
-    let path;
-
-    // 🔥 TRATAMENTO CORRETO
-    if (token === WBNB) {
-      path = [WBNB, USDT]; // BNB direto
-    } else {
-      path = [token, WBNB, USDT]; // BTC via BNB
-    }
+    const path = [BTCB, WBNB, USDT];
 
     const amounts = await router.getAmountsOut(amountIn, path);
 
-    const index = path.length - 1;
-
-    const price = Number(ethers.formatUnits(amounts[index], 18));
-
-    return price;
+    return Number(ethers.formatUnits(amounts[2], 18));
 
   } catch (err) {
-    console.log("❌ Erro RPC:", err.message);
+    console.log("❌ BTC erro:", err.message);
+    return null;
+  }
+}
+
+// ================= PREÇO BNB =================
+async function getBNBPrice() {
+  try {
+    const amountIn = ethers.parseUnits("1", 18);
+
+    const path = [WBNB, USDT];
+
+    const amounts = await router.getAmountsOut(amountIn, path);
+
+    return Number(ethers.formatUnits(amounts[1], 18));
+
+  } catch (err) {
+    console.log("❌ BNB erro:", err.message);
     return null;
   }
 }
@@ -63,8 +67,8 @@ async function getPrice(token) {
 async function loop() {
   while (true) {
 
-    const btc = await getPrice(BTCB);
-    const bnb = await getPrice(WBNB);
+    const btc = await getBTCPrice();
+    const bnb = await getBNBPrice();
 
     if (!btc || !bnb) {
       console.log("⚠️ erro ao pegar preço");
@@ -73,8 +77,8 @@ async function loop() {
       console.log("💰 BTC:", btc);
       console.log("💰 BNB:", bnb);
 
+      // BTC
       if (!baseBTC) baseBTC = btc;
-      if (!baseBNB) baseBNB = bnb;
 
       if (!inBTC && btc <= baseBTC * 0.995) {
         console.log("🟢 COMPRAR BTC");
@@ -87,6 +91,9 @@ async function loop() {
         inBTC = false;
         baseBTC = btc;
       }
+
+      // BNB
+      if (!baseBNB) baseBNB = bnb;
 
       if (!inBNB && bnb <= baseBNB * 0.995) {
         console.log("🟢 COMPRAR BNB");
