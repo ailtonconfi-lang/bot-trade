@@ -8,7 +8,20 @@ const PRIVATE_KEY = process.env.PRIVATE_KEY;
 const provider = new ethers.JsonRpcProvider(RPC_URL);
 const wallet = PRIVATE_KEY ? new ethers.Wallet(PRIVATE_KEY, provider) : null;
 
-console.log("🚀 Bot iniciado");
+console.log("🚀 Bot iniciado (modo RPC)");
+
+// ===== CONTRATOS =====
+const ROUTER = "0x10ED43C718714eb63d5aA57B78B54704E256024E";
+const routerAbi = [
+  "function getAmountsOut(uint amountIn, address[] memory path) view returns (uint[] memory amounts)"
+];
+
+const router = new ethers.Contract(ROUTER, routerAbi, provider);
+
+// ===== TOKENS =====
+const WBNB = "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c";
+const BTCB = "0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c";
+const USDT = "0x55d398326f99059fF775485246999027B3197955";
 
 // ===== ESTADO =====
 let baseBTC = null;
@@ -16,42 +29,20 @@ let baseBNB = null;
 let inBTC = false;
 let inBNB = false;
 
-// ===== FETCH COM TIMEOUT =====
-async function fetchWithTimeout(url, timeout = 5000) {
-  return Promise.race([
-    fetch(url),
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("timeout")), timeout)
-    )
-  ]);
-}
-
-// ===== PREÇO BTC =====
-async function getPriceBTC() {
+// ===== PEGAR PREÇO VIA PANCAKESWAP =====
+async function getPrice(token) {
   try {
-    const res = await fetchWithTimeout("https://api.coinbase.com/v2/prices/BTC-USD/spot");
-    const data = await res.json();
-    return parseFloat(data.data.amount);
-  } catch {
-    try {
-      const res = await fetchWithTimeout("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd");
-      const data = await res.json();
-      return data.bitcoin.usd;
-    } catch {
-      console.log("❌ BTC sem preço");
-      return null;
-    }
-  }
-}
+    const amountIn = ethers.parseUnits("1", 18);
+    const path = [token, USDT];
 
-// ===== PREÇO BNB =====
-async function getPriceBNB() {
-  try {
-    const res = await fetchWithTimeout("https://api.coingecko.com/api/v3/simple/price?ids=binancecoin&vs_currencies=usd");
-    const data = await res.json();
-    return data.binancecoin.usd;
-  } catch {
-    console.log("❌ BNB sem preço");
+    const amounts = await router.getAmountsOut(amountIn, path);
+
+    const price = Number(ethers.formatUnits(amounts[1], 18));
+
+    return price;
+
+  } catch (err) {
+    console.log("❌ Erro RPC:", err.message);
     return null;
   }
 }
@@ -68,18 +59,18 @@ async function sell(token) {
 // ===== LOOP =====
 setInterval(async () => {
 
-  const btc = await getPriceBTC();
-  const bnb = await getPriceBNB();
+  const btc = await getPrice(BTCB);
+  const bnb = await getPrice(WBNB);
 
   if (!btc || !bnb) {
-    console.log("⚠️ Erro ao pegar preço");
+    console.log("⚠️ Erro ao pegar preço RPC");
     return;
   }
 
   console.log("💰 BTC:", btc);
   console.log("💰 BNB:", bnb);
 
-  // ===== BTC =====
+  // BTC
   if (!baseBTC) baseBTC = btc;
 
   if (!inBTC && btc <= baseBTC * 0.995) {
@@ -94,7 +85,7 @@ setInterval(async () => {
     baseBTC = btc;
   }
 
-  // ===== BNB =====
+  // BNB
   if (!baseBNB) baseBNB = bnb;
 
   if (!inBNB && bnb <= baseBNB * 0.995) {
