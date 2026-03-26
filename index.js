@@ -12,7 +12,7 @@ if (!RPC_URL) {
 if (!PRIVATE_KEY) {
   console.log("⚠️ PRIVATE_KEY não encontrada, usando fallback");
 }
-}
+
 
 // ===== CONFIG =====
 const TOKEN_ADDRESS = "0x55d398326f99059fF775485246999027B3197955"; // USDT (teste)
