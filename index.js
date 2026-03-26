@@ -1,5 +1,7 @@
 const { ethers } = require("ethers");
-const https = require("https");
+
+// fetch compatível Railway
+global.fetch = require("node-fetch");
 
 // ===== ENV =====
 const RPC_URL = process.env.RPC_URL || "https://bsc-dataseed.binance.org/";
@@ -14,106 +16,101 @@ const BTCB = "0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c";
 const provider = new ethers.JsonRpcProvider(RPC_URL);
 const wallet = PRIVATE_KEY ? new ethers.Wallet(PRIVATE_KEY, provider) : null;
 
-console.log("🚀 Bot iniciado");
+console.log("🚀 Iniciando bot...");
 
 // ===== ESTADO =====
-let basePriceBTC = null;
-let basePriceBNB = null;
-let inPositionBTC = false;
-let inPositionBNB = false;
+let baseBTC = null;
+let baseBNB = null;
+let inBTC = false;
+let inBNB = false;
 
-// ===== PREÇO REAL (BINANCE - CORRIGIDO) =====
-function getRealPrice(symbol) {
-  return new Promise((resolve) => {
-    https.get(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`, (res) => {
-      let data = "";
+// ===== PREÇO REAL (BINANCE + FALLBACK) =====
+async function getPrice(symbol) {
+  try {
+    const res = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`);
+    const data = await res.json();
 
-      res.on("data", chunk => data += chunk);
+    if (data.price) {
+      return parseFloat(data.price);
+    }
 
-      res.on("end", () => {
-        try {
-          const json = JSON.parse(data);
+  } catch (e) {
+    console.log("⚠️ Binance falhou...");
+  }
 
-          if (!json.price) {
-            console.log("❌ API inválida:", json);
-            return resolve(null);
-          }
+  // fallback CoinGecko
+  try {
+    const url = symbol.includes("BTC")
+      ? "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd"
+      : "https://api.coingecko.com/api/v3/simple/price?ids=binancecoin&vs_currencies=usd";
 
-          const price = parseFloat(json.price);
+    const res = await fetch(url);
+    const data = await res.json();
 
-          if (isNaN(price)) {
-            console.log("❌ Preço inválido");
-            return resolve(null);
-          }
+    if (symbol.includes("BTC")) {
+      return data.bitcoin.usd;
+    } else {
+      return data.binancecoin.usd;
+    }
 
-          resolve(price);
-
-        } catch (err) {
-          console.log("❌ Erro parse:", err.message);
-          resolve(null);
-        }
-      });
-
-    }).on("error", (err) => {
-      console.log("❌ Erro request:", err.message);
-      resolve(null);
-    });
-  });
+  } catch (err) {
+    console.log("❌ Erro geral API");
+    return null;
+  }
 }
 
 // ===== COMPRA =====
 async function buy(token) {
-  console.log("🟢 COMPRANDO", token);
+  console.log("🟢 COMPRANDO:", token);
 }
 
 // ===== VENDA =====
 async function sell(token) {
-  console.log("🔴 VENDENDO", token);
+  console.log("🔴 VENDENDO:", token);
 }
 
 // ===== LOOP =====
 setInterval(async () => {
 
-  const priceBTC = await getRealPrice("BTCUSDT");
-  const priceBNB = await getRealPrice("BNBUSDT");
+  const btc = await getPrice("BTCUSDT");
+  const bnb = await getPrice("BNBUSDT");
 
-  // proteção contra erro
-  if (!priceBTC || !priceBNB) {
-    console.log("⚠️ Preço inválido, pulando...");
+  if (!btc || !bnb) {
+    console.log("⚠️ Erro ao pegar preço");
     return;
   }
 
-  console.log("💰 BTC:", priceBTC);
-  console.log("💰 BNB:", priceBNB);
+  console.log("💰 BTC:", btc);
+  console.log("💰 BNB:", bnb);
 
   // ===== BTC =====
-  if (!basePriceBTC) basePriceBTC = priceBTC;
+  if (!baseBTC) baseBTC = btc;
 
-  if (!inPositionBTC && priceBTC <= basePriceBTC * 0.995) {
-    await buy(BTCB);
-    inPositionBTC = true;
-    basePriceBTC = priceBTC;
+  if (!inBTC && btc <= baseBTC * 0.995) {
+    await buy("BTC");
+    inBTC = true;
+    baseBTC = btc;
   }
 
-  if (inPositionBTC && priceBTC >= basePriceBTC * 1.005) {
-    await sell(BTCB);
-    inPositionBTC = false;
-    basePriceBTC = priceBTC;
+  if (inBTC && btc >= baseBTC * 1.005) {
+    await sell("BTC");
+    inBTC = false;
+    baseBTC = btc;
   }
 
   // ===== BNB =====
-  if (!basePriceBNB) basePriceBNB = priceBNB;
+  if (!baseBNB) baseBNB = bnb;
 
-  if (!inPositionBNB && priceBNB <= basePriceBNB * 0.995) {
-    await buy(WBNB);
-    inPositionBNB = true;
-    basePriceBNB = priceBNB;
+  if (!inBNB && bnb <= baseBNB * 0.995) {
+    await buy("BNB");
+    inBNB = true;
+    baseBNB = bnb;
   }
 
-  if (inPositionBNB && priceBNB >= basePriceBNB * 1.005) {
-    await sell(WBNB);
-    inPositionBNB = false;
-    basePriceBNB = priceBNB;
+  if (inBNB && bnb >= baseBNB * 1.005) {
+    await sell("BNB");
+    inBNB = false;
+    baseBNB = bnb;
   }
 
 }, 10000);
