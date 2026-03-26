@@ -31,17 +31,25 @@ let baseBNB = null;
 let inBTC = false;
 let inBNB = false;
 
-// ================= PREÇO CORRETO =================
+// ================= PREÇO CORRIGIDO =================
 async function getPrice(token) {
   try {
     const amountIn = ethers.parseUnits("1", 18);
 
-    // 🔥 rota corrigida
-    const path = [token, WBNB, USDT];
+    let path;
+
+    // 🔥 TRATAMENTO CORRETO
+    if (token === WBNB) {
+      path = [WBNB, USDT]; // BNB direto
+    } else {
+      path = [token, WBNB, USDT]; // BTC via BNB
+    }
 
     const amounts = await router.getAmountsOut(amountIn, path);
 
-    const price = Number(ethers.formatUnits(amounts[2], 18));
+    const index = path.length - 1;
+
+    const price = Number(ethers.formatUnits(amounts[index], 18));
 
     return price;
 
@@ -97,4 +105,4 @@ async function loop() {
   }
 }
 
-loop()
+loop();
