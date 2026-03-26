@@ -1,7 +1,7 @@
 const { ethers } = require("ethers");
 
 // ===== ENV =====
-const RPC_URL = process.env.RPC_URL;
+const RPC_URL = process.env.RPC_URL || "https://bsc-dataseed.binance.org/";
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
 
 // ===== VALIDAÇÃO =====
