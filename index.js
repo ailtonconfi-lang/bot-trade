@@ -1,86 +1,70 @@
-const http = require("http");
+const { ethers } = require("ethers");
+
+// ===== ENV =====
+const RPC_URL = process.env.RPC_URL || "https://bsc-dataseed.binance.org/";
+const PRIVATE_KEY = process.env.PRIVATE_KEY;
+
+// ===== CONFIG =====
+const ROUTER = "0x10ED43C718714eb63d5aA57B78B54704E256024E";
+const USDT = "0x55d398326f99059fF775485246999027B3197955";
+const WBNB = "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c";
+const BTCB = "0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c";
+
+// ===== SETUP =====
+const provider = new ethers.JsonRpcProvider(RPC_URL);
+const wallet = PRIVATE_KEY
+  ? new ethers.Wallet(PRIVATE_KEY, provider)
+  : null;
+
+const router = new ethers.Contract(
+  ROUTER,
+  ["function getAmountsOut(uint amountIn, address[] memory path) public view returns (uint[] memory amounts)"],
+  provider
+);
 
 console.log("🚀 Bot iniciado");
 
-// ===== SERVIDOR FAKE (impede restart) =====
-http.createServer((req, res) => {
-  res.write("Bot rodando");
-  res.end();
-}).listen(3000);
-
-// ================= ESTADO =================
-let baseBTC = null;
-let baseBNB = null;
-
-let inBTC = false;
-let inBNB = false;
-
-// ================= PREÇO =================
-async function getPrices() {
+// ===== PEGAR PREÇO REAL (SEM API EXTERNA) =====
+async function getPrice(token) {
   try {
-    const res = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,binancecoin&vs_currencies=usd");
-    const data = await res.json();
+    const amountIn = ethers.parseUnits("1", 18);
 
-    if (!data.bitcoin || !data.binancecoin) return null;
+    const path = token === WBNB
+      ? [WBNB, USDT]
+      : [token, WBNB, USDT];
 
-    return {
-      btc: data.bitcoin.usd,
-      bnb: data.binancecoin.usd
-    };
+    const amounts = await router.getAmountsOut(amountIn, path);
+
+    const price = Number(ethers.formatUnits(amounts[amounts.length - 1], 18));
+
+    return price;
 
   } catch (err) {
-    console.log("❌ erro API:", err.message);
+    console.log("❌ Erro RPC:", err.reason || err.message);
     return null;
   }
 }
 
-// ================= BOT =================
-async function runBot() {
+// ===== LOOP =====
+async function loop() {
+  while (true) {
+    try {
+      const btc = await getPrice(BTCB);
+      const bnb = await getPrice(WBNB);
 
-  const prices = await getPrices();
+      if (!btc || !bnb) {
+        console.log("⚠️ erro ao pegar preço");
+      } else {
+        console.log(`🔥 BTC: ${btc}`);
+        console.log(`🔥 BNB: ${bnb}`);
+      }
 
-  if (!prices) {
-    console.log("⚠️ erro ao pegar preço");
-    return;
-  }
+    } catch (err) {
+      console.log("❌ erro geral:", err.message);
+    }
 
-  const btc = prices.btc;
-  const bnb = prices.bnb;
-
-  console.log("💰 BTC:", btc);
-  console.log("💰 BNB:", bnb);
-
-  // BTC
-  if (!baseBTC) baseBTC = btc;
-
-  if (!inBTC && btc <= baseBTC * 0.995) {
-    console.log("🟢 COMPRAR BTC");
-    inBTC = true;
-    baseBTC = btc;
-  }
-
-  if (inBTC && btc >= baseBTC * 1.005) {
-    console.log("🔴 VENDER BTC");
-    inBTC = false;
-    baseBTC = btc;
-  }
-
-  // BNB
-  if (!baseBNB) baseBNB = bnb;
-
-  if (!inBNB && bnb <= baseBNB * 0.995) {
-    console.log("🟢 COMPRAR BNB");
-    inBNB = true;
-    baseBNB = bnb;
-  }
-
-  if (inBNB && bnb >= baseBNB * 1.005) {
-    console.log("🔴 VENDER BNB");
-    inBNB = false;
-    baseBNB = bnb;
+    await new Promise(r => setTimeout(r, 5000));
   }
 }
 
-// ================= LOOP =================
-setInterval(runBot, 10000);
-runBot()
+loop();
